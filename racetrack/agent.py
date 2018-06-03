@@ -8,6 +8,7 @@ from model import DQN
 
 
 tf.app.flags.DEFINE_boolean("train", False, "Training mode")
+tf.app.flags.DEFINE_boolean("cont-train", False, "Continuous Training mode")
 tf.app.flags.DEFINE_string("track", "tracks/barto-small.track", "Map file name")
 FLAGS = tf.app.flags.FLAGS
 
@@ -23,7 +24,7 @@ OBSERVE = 5000
 # 0: nop, 1: up, 2: up_right, 3: right, 4: down_right, 5: down, 6: down_left, 7: left, 8: up_left
 NUM_ACTION = 9
 
-def train(track, width, height):
+def train(track, width, height, cont):
     sess = tf.Session()
 
     game = Game(track, width, height, show_game=False)
@@ -33,7 +34,11 @@ def train(track, width, height):
     tf.summary.scalar('avg.reward/ep.', tf.reduce_mean(rewards))
 
     saver = tf.train.Saver()
-    sess.run(tf.global_variables_initializer())
+    if cont:
+        ckpt = tf.train.get_checkpoint_state('model')
+        saver.restore(sess, ckpt.model_checkpoint_path)
+    else:
+        sess.run(tf.global_variables_initializer())
 
     writer = tf.summary.FileWriter('logs', sess.graph)
     summary_merged = tf.summary.merge_all()
@@ -43,6 +48,9 @@ def train(track, width, height):
     epsilon = 1.0
     time_step = 0
     total_reward_list = []
+
+    if cont:
+        OBSERVE = 0
 
     for episode in range(MAX_EPISODE):
         terminal = False
@@ -123,8 +131,10 @@ def main(_):
         height = int(data[1])
         track = data[2:]
 
-        if FLAGS.train:
-            train(track, width, height)
+        if FLAGS.cont-train:
+            train(track, width, height, True)
+        elif FLAGS.train:
+            train(track, width, height, False)
         else:
             replay(track, width, height)
 

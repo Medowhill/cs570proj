@@ -140,8 +140,6 @@ class Game:
 
         reward = self._update_car(action)
 
-        if self._will_gameover(1):
-            reward -= 2
 
         gameover = self._is_gameover()
         success = self._is_success()
@@ -151,9 +149,11 @@ class Game:
         elif success:
             reward = (self.height + self.width)
             self.total_success += 1
+        elif self._will_gameover(1):
+            reward -= 5
         self.current_reward += reward
 
-        timeout = self.steps > 10000
+        timeout = self.steps > 1000
         if timeout:
             print("TIMEOUT")
 
