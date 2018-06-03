@@ -1,0 +1,7 @@
+*.swp
+racetrack/__pycache__
+racetrack/logs
+racetrack/model
+traffic/__pycache__
+traffic/logs
+traffic/model
