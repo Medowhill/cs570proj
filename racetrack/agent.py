@@ -7,19 +7,15 @@ from game import Game
 from model import DQN
 
 
-tf.app.flags.DEFINE_boolean("train", False, "Training mode")
-tf.app.flags.DEFINE_boolean("cont-train", False, "Continuous Training mode")
+tf.app.flags.DEFINE_boolean("train", False, "Training Mode")
+tf.app.flags.DEFINE_boolean("cont", False, "Continuous Training Mode")
+tf.app.flags.DEFINE_boolean("rand", False, "Random Play Mode")
 tf.app.flags.DEFINE_string("track", "tracks/barto-small.track", "Map file name")
 FLAGS = tf.app.flags.FLAGS
 
-# 최대 학습 횟수
 MAX_EPISODE = 100000000
-# 1000번의 학습마다 한 번씩 타겟 네트웍을 업데이트합니다.
 TARGET_UPDATE_INTERVAL = 1000
-# 4 프레임마다 한 번씩 학습합니다.
 TRAIN_INTERVAL = 4
-# 학습 데이터를 어느정도 쌓은 후, 일정 시간 이후에 학습을 시작하도록 합니다.
-OBSERVE = 5000
 
 # 0: nop, 1: up, 2: up_right, 3: right, 4: down_right, 5: down, 6: down_left, 7: left, 8: up_left
 NUM_ACTION = 9
@@ -50,7 +46,9 @@ def train(track, width, height, cont):
     total_reward_list = []
 
     if cont:
-        OBSERVE = 0
+        OBSERVE = 100
+    else:
+        OBSERVE = 5000
 
     for episode in range(MAX_EPISODE):
         terminal = False
@@ -60,7 +58,7 @@ def train(track, width, height, cont):
         brain.init_state(state)
 
         if episode > OBSERVE:
-            epsilon = 0.25
+            epsilon = max(2000 / episode, 0.01)
 
         while not terminal:
             if np.random.rand() < epsilon:
@@ -91,10 +89,10 @@ def train(track, width, height, cont):
             total_reward_list = []
 
         if episode > OBSERVE and episode % 10000 == 0:
-            saver.save(sess, 'model/dqn.ckpt', global_step=time_step)
+            saver.save(sess, 'model/dqn.ckpt', global_step=episode)
 
 
-def replay(track, width, height):
+def replay(track, width, height, rand):
     sess = tf.Session()
 
     game = Game(track, width, height, show_game=True)
@@ -112,14 +110,17 @@ def replay(track, width, height):
         brain.init_state(state)
 
         while not terminal:
-            action = brain.get_action()
+            if rand and np.random.rand() < 0.1:
+                action = random.randrange(NUM_ACTION)
+            else:
+                action = brain.get_action()
 
             state, reward, terminal = game.step(action)
             total_reward += reward
 
             brain.remember(state, action, reward, terminal)
 
-            time.sleep(0.1)
+            time.sleep(0.15)
 
         print('Games: %d Score: %d' % (episode + 1, total_reward))
 
@@ -131,12 +132,14 @@ def main(_):
         height = int(data[1])
         track = data[2:]
 
-        if FLAGS.cont-train:
+        if FLAGS.cont:
             train(track, width, height, True)
         elif FLAGS.train:
             train(track, width, height, False)
+        elif FLAGS.rand:
+            replay(track, width, height, True)
         else:
-            replay(track, width, height)
+            replay(track, width, height, False)
 
 
 if __name__ == '__main__':

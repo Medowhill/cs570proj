@@ -2,6 +2,9 @@ import numpy as np
 import random
 import itertools
 import os
+from math import sqrt
+
+from dijk import get_dist_map
 
 class Game:
     def __init__(self, track, width, height, show_game=True):
@@ -15,13 +18,21 @@ class Game:
         self.dx = None
         self.dy = None
 
-        self.sx = None
-        self.sy = None
-        self.tx = None
-        self.ty = None
-
-        self.ostate = None
-        self.tstate = None
+        self.ostate = np.zeros((self.width, self.height))
+        self.tstate = np.zeros((self.width, self.height))
+        for y in range(self.height):
+            for x in range(self.width):
+                c = self.track[y][x]
+                if c == "@":
+                    self.sx = x
+                    self.sy = y
+                elif c == "#":
+                    self.ostate[x, y] = 1
+                elif c == "*":
+                    self.tx = x
+                    self.ty = y
+                    self.tstate[x, y] = 1
+        self.dist_map = get_dist_map(width, height, self.ostate, self.tx, self.ty)
 
         self.steps = 0
         self.total_reward = 0.
@@ -64,70 +75,52 @@ class Game:
                     print("_", end="")
             print()
 
-        if self._is_gameover():
-            print("GAME OVER!!")
-        elif self._is_success():
-            print("SUCCESS!!")
-
     def reset(self):
         self.steps = 0
         self.current_reward = 0
         self.total_game += 1
 
+        self.x = self.sx
+        self.y = self.sy
         self.dx = 0
         self.dy = 0
 
-        self.ostate = np.zeros((self.width, self.height))
-        self.tstate = np.zeros((self.width, self.height))
-        for y in range(self.height):
-            for x in range(self.width):
-                c = self.track[y][x]
-                if c == "@":
-                    self.x = x
-                    self.y = y
-                    self.sx = x
-                    self.sy = y
-                elif c == "#":
-                    self.ostate[x, y] = 1
-                elif c == "*":
-                    self.tx = x
-                    self.ty = y
-                    self.tstate[x, y] = 1
-
         return self._get_state()
 
-    def _update_car(self, action):
+    def _update_velocity(self, action):
         # 0: up_left, 1: left, 2: down_left, 3: up, 4: nop, 5: down, 6: up_right, 7: right, 8: down_right
         self.dx += int(action / 3) - 1
         self.dy += action % 3 - 1
 
-        p_from_start = abs(self.x - self.sx) + abs(self.y - self.sy)
-        p_to_target = abs(self.x - self.tx) + abs(self.y - self.ty)
-
+    def _update_car(self):
+        prd = self.dist_map[(self.x, self.y)]
         self.x += self.dx
         self.y += self.dy
+        rd = self.dist_map[(self.x, self.y)]
+        return prd - rd
 
-        from_start = abs(self.x - self.sx) + abs(self.y - self.sy)
-        to_target = abs(self.x - self.tx) + abs(self.y - self.ty)
+    def _is_gameover_move(self):
+        d = sqrt(self.dx * self.dx + self.dy * self.dy)
+        x = self.x
+        y = self.y
+        for i in range(int(d)):
+            x += self.dx / d
+            y += self.dy / d
+            if self._is_illegal(int(x), int(y)):
+                return True
+        return self._is_illegal(self.x + self.dx, self.y + self.dy)
 
-        reward = 0
-        if p_from_start < from_start:
-            reward += 1
-        if p_to_target > to_target:
-            reward += 1
-        return reward
-
-    def _is_gameover(self):
-        return self.x < 0 or self.x >= self.width or \
-            self.y < 0 or self.y >= self.height or \
-            self.ostate[self.x, self.y]
+    def _is_illegal(self, x, y):
+        return x < 0 or x >= self.width or \
+            y < 0 or y >= self.height or \
+            self.ostate[x, y]
 
     def _will_gameover(self, after):
-        self.x += self.dx * after
-        self.y += self.dy * after
-        b = self._is_gameover()
-        self.x -= self.dx * after
-        self.y -= self.dy * after
+        self.x += self.dx * (after - 1)
+        self.y += self.dy * (after - 1)
+        b = self._is_gameover_move()
+        self.x -= self.dx * (after - 1)
+        self.y -= self.dy * (after - 1)
         return b
 
     def _is_success(self):
@@ -138,22 +131,30 @@ class Game:
     def step(self, action):
         self.steps += 1
 
-        reward = self._update_car(action)
-
-
-        gameover = self._is_gameover()
-        success = self._is_success()
+        self._update_velocity(action)
+        gameover = self._is_gameover_move()
 
         if gameover:
             reward = -(self.height + self.width)
-        elif success:
-            reward = (self.height + self.width)
-            self.total_success += 1
-        elif self._will_gameover(1):
-            reward -= 5
+        else:
+            reward = self._update_car() - 1
+            success = self._is_success()
+            if success:
+                reward = (self.height + self.width)
+                self.total_success += 1
+            elif self._will_gameover(1):
+#                reward -= (self.height + self.width) / 5
+                reward -= 3
+            elif self._will_gameover(2):
+#                reward -= (self.height + self.width) / 10
+                reward -= 2
+            elif self._will_gameover(3):
+#                reward -= (self.height + self.width) / 15
+                reward -= 1
+
         self.current_reward += reward
 
-        timeout = self.steps > 1000
+        timeout = self.steps > 10000
         if timeout:
             print("TIMEOUT")
 
