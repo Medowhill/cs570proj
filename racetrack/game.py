@@ -54,6 +54,7 @@ class Game:
 
         r = np.append(cstate, nstate, axis=0)
         r = np.append(r, self.ostate, axis=0)
+#        r = np.append(cstate, self.ostate, axis=0)
         r = np.append(r, self.tstate, axis=0)
         return r
 

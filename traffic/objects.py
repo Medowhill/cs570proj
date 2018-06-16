@@ -52,18 +52,20 @@ class Car(GameObj):
         pc = self.col
         self._move(w, h, [])
 
-        dist = self.row + self.col
-        if self.max < dist:
-            self.max = dist
-            return 1
+#        dist = self.row + self.col
+#        if self.max < dist:
+#            self.max = dist
+#            return 1
 #        elif self.max - (w + h) / 10 >= dist:
 #            return -1
-        else:
-            return 0
-#        if pr < self.row or pc < self.col:
-#            return 1
 #        else:
 #            return 0
+        if pr < self.row or pc < self.col:
+            return 1
+        elif pr == self.row and pc == self.col:
+            return -1
+        else:
+            return -2
 
 class Target(GameObj):
     def __init__(self, w, h):

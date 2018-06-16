@@ -2,11 +2,16 @@ import tensorflow as tf
 import numpy as np
 import random
 import time
+from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
+from tensorflow.python import pywrap_tensorflow
+import os
 
 from game import Game
 from model import DQN
 
 
+tf.app.flags.DEFINE_boolean("cont", False, "Continuous Training Mode")
+tf.app.flags.DEFINE_boolean("test", False, "Testing Mode")
 tf.app.flags.DEFINE_boolean("train", False, "학습모드. 게임을 화면에 보여주지 않습니다.")
 FLAGS = tf.app.flags.FLAGS
 
@@ -23,20 +28,43 @@ OBSERVE = 250
 NUM_ACTION = 5
 SCREEN_WIDTH = 5
 SCREEN_HEIGHT = 5
-OBJ_PROB = 0.1
+OBS_NUM = 3
+BUN_NUM = 3
+#SCREEN_WIDTH = 10
+#SCREEN_HEIGHT = 10
+#OBS_NUM = 10
+#BUN_NUM = 10
+CHANNEL = 4
 
-
-def train():
+def train(cont):
     sess = tf.Session()
 
-    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, OBJ_PROB, show_game=False)
-    brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, NUM_ACTION)
+    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, OBS_NUM, BUN_NUM, show_game=False)
+    brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, CHANNEL, NUM_ACTION)
 
     rewards = tf.placeholder(tf.float32, [None])
     tf.summary.scalar('avg.reward/ep.', tf.reduce_mean(rewards))
 
     saver = tf.train.Saver()
-    sess.run(tf.global_variables_initializer())
+    if cont:
+        sess.run(tf.global_variables_initializer())
+
+        ckpt = str(tf.train.get_checkpoint_state('model')) 
+        i = ckpt.find("\"") + 1
+        j = ckpt.find("\"", i)
+        reader = pywrap_tensorflow.NewCheckpointReader(ckpt[i:j])
+        var_to_shape_map = reader.get_variable_to_shape_map()
+        target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        for key in var_to_shape_map:
+            if "conv2d" in key and "Adam" not in key:
+                for key_f in target_vars:
+                    if key in key_f.name:
+                        sess.run(key_f.assign(reader.get_tensor(key)))
+                        break
+
+#        saver.restore(sess, ckpt.model_checkpoint_path)
+    else:
+        sess.run(tf.global_variables_initializer())
 
     writer = tf.summary.FileWriter('logs', sess.graph)
     summary_merged = tf.summary.merge_all()
@@ -80,7 +108,8 @@ def train():
 
             time_step += 1
 
-        print('Games: %d Score: %d' % (episode + 1, total_reward))
+        if episode % 10 == 0:
+            print('Games: %d Score: %d' % (episode + 1, total_reward))
 
         total_reward_list.append(total_reward)
 
@@ -89,15 +118,15 @@ def train():
             writer.add_summary(summary, time_step)
             total_reward_list = []
 
-        if episode % 100 == 0:
-            saver.save(sess, 'model/dqn.ckpt', global_step=time_step)
+        if episode % 10000 == 0:
+            saver.save(sess, 'model/dqn.ckpt', global_step=episode)
 
 
 def replay():
     sess = tf.Session()
 
-    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, OBJ_PROB, show_game=True)
-    brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, NUM_ACTION)
+    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, OBS_NUM, BUN_NUM, show_game=True)
+    brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, CHANNEL, NUM_ACTION)
 
     saver = tf.train.Saver()
     ckpt = tf.train.get_checkpoint_state('model')
@@ -118,14 +147,45 @@ def replay():
 
             brain.remember(state, action, reward, terminal)
 
-            time.sleep(0.1)
+            time.sleep(0.3)
 
         print('Games: %d Score: %d' % (episode + 1, total_reward))
 
+def test():
+    sess = tf.Session()
+
+    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, OBS_NUM, BUN_NUM, show_game=False)
+    brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, CHANNEL, NUM_ACTION)
+
+    saver = tf.train.Saver()
+    ckpt = tf.train.get_checkpoint_state('model')
+    saver.restore(sess, ckpt.model_checkpoint_path)
+
+    total_succ = 0
+    for episode in range(10000):
+        terminal = False
+        total_reward = 0
+
+        state = game.reset()
+        brain.init_state(state)
+
+        step = 0
+        while not terminal and step <= 200:
+            action = brain.get_action()
+            state, reward, terminal, succ = game.step(action)
+            if terminal and succ:
+                total_succ += 1
+            step += 1
+
+    print(total_succ)
 
 def main(_):
-    if FLAGS.train:
-        train()
+    if FLAGS.test:
+        test()
+    if FLAGS.cont:
+        train(True)
+    elif FLAGS.train:
+        train(False)
     else:
         replay()
 

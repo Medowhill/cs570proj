@@ -18,8 +18,8 @@ class DQN:
     # 앞의 상태까지 고려하기 위함입니다.
     STATE_LEN = 4
 
-    def __init__(self, session, width, height, n_action):
-        width = width * 4
+    def __init__(self, session, width, height, channel, n_action):
+        width *= channel
 
         self.session = session
         self.n_action = n_action
@@ -87,9 +87,9 @@ class DQN:
 
         return action
 
-    def init_state(self, state):
+    def init_state(self, state_):
         # 현재 게임판의 상태를 초기화합니다. 앞의 상태까지 고려한 스택으로 되어 있습니다.
-        state = [state for _ in range(self.STATE_LEN)]
+        state = [state_ for _ in range(self.STATE_LEN)]
         # axis=2 는 input_X 의 값이 다음처럼 마지막 차원으로 쌓아올린 형태로 만들었기 때문입니다.
         # 이렇게 해야 컨볼루션 레이어를 손쉽게 이용할 수 있습니다.
         # self.input_X = tf.placeholder(tf.float32, [None, width, height, self.STATE_LEN])

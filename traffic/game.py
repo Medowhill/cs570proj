@@ -6,19 +6,18 @@ import os
 from objects import GameObj, Car, Obstacle, Bunker, Target
 
 class Game:
-    def __init__(self, width, height, prob, show_game=True):
+    def __init__(self, width, height, obs, bun, show_game=True):
         self.width = width
         self.height = height
-        self.prob = prob
         self.show_game = show_game
-        self.num_of_obstacles = 0
+        self.num_of_obstacles = obs
+        self.num_of_bunkers = bun
 
         self.car = None
         self.target = Target(width, height)
         self.obstacles = None
         self.bunkers = None
 
-        self.steps = 0
         self.total_reward = 0.
         self.current_reward = 0.
         self.total_game = 0
@@ -29,7 +28,7 @@ class Game:
         vstate = np.zeros((self.width, self.height))
         hstate = np.zeros((self.width, self.height))
         bstate = np.zeros((self.width, self.height))
-        mstate = np.zeros((self.width, self.height))
+#        mstate = np.zeros((self.width, self.height))
 
         cstate[self.car.row, self.car.col] = 1
         for o in self.obstacles:
@@ -39,17 +38,17 @@ class Game:
                 hstate[o.row, o.col] = 1
         for b in self.bunkers:
             bstate[b.row, b.col] = 1
-        for r in range(self.height):
-            for c in range(self.width):
-                if r + c <= self.car.max:
-                    mstate[r, c] = 1
-                else:
-                    break
+#        for r in range(self.height):
+#            for c in range(self.width):
+#                if r + c <= self.car.max:
+#                    mstate[r, c] = 1
+#                else:
+#                    break
 
         r = np.append(cstate, vstate, axis=0)
         r = np.append(r, hstate, axis=0)
         r = np.append(r, bstate, axis=0)
-        r = np.append(r, mstate, axis=0)
+#        r = np.append(r, mstate, axis=0)
         return r
 
     def _draw_screen(self):
@@ -87,24 +86,12 @@ class Game:
         self.car = Car()
         self.obstacles = []
         self.bunkers = []
-
-        if self.show_game:
-            self.num_of_obstacles = 3
-        else:
-            if self.total_game < 500:
-                self.num_of_obstacles = 0
-            elif self.total_game < 5000:
-                self.num_of_obstacles = 1
-            elif self.total_game < 50000:
-                self.num_of_obstacles = 2
-            else:
-                self.num_of_obstacles = 3
         
         l = list(itertools.product(range(self.height), range(self.width)))
         random.shuffle(l)
         i = 0
         n = 0
-        while n < self.num_of_obstacles * 2:
+        while n < self.num_of_obstacles + self.num_of_bunkers:
             r, c = l[i]
             if (r == 0 and c == 0) or (r == self.height - 1 and c == self.width - 1):
                 pass
@@ -133,8 +120,6 @@ class Game:
         return self.car.same_pos(self.target)
 
     def step(self, action):
-        self.steps += 1
-
         move_reward = self._update_car(action)
         gameover = self._is_gameover()
         success = self._is_success()
@@ -152,15 +137,11 @@ class Game:
             reward = move_reward
         self.current_reward += reward
 
-        timeout = self.steps > 100000
-        if timeout:
-            print("TIMEOUT")
-
-        end = gameover or success or timeout
+        end = gameover or success
         if end:
             self.total_reward += self.current_reward
 
         if self.show_game:
             self._draw_screen()
 
-        return self._get_state(), reward, end
+        return self._get_state(), reward, end, success

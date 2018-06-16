@@ -13,9 +13,10 @@ tf.app.flags.DEFINE_boolean("rand", False, "Random Play Mode")
 tf.app.flags.DEFINE_string("track", "tracks/barto-small.track", "Map file name")
 FLAGS = tf.app.flags.FLAGS
 
-MAX_EPISODE = 100000000
+MAX_EPISODE = 1000000
 TARGET_UPDATE_INTERVAL = 1000
 TRAIN_INTERVAL = 4
+CHANNEL = 4
 
 # 0: nop, 1: up, 2: up_right, 3: right, 4: down_right, 5: down, 6: down_left, 7: left, 8: up_left
 NUM_ACTION = 9
@@ -24,7 +25,7 @@ def train(track, width, height, cont):
     sess = tf.Session()
 
     game = Game(track, width, height, show_game=False)
-    brain = DQN(sess, width, height, NUM_ACTION)
+    brain = DQN(sess, width, height, CHANNEL, NUM_ACTION)
 
     rewards = tf.placeholder(tf.float32, [None])
     tf.summary.scalar('avg.reward/ep.', tf.reduce_mean(rewards))
@@ -58,7 +59,7 @@ def train(track, width, height, cont):
         brain.init_state(state)
 
         if episode > OBSERVE:
-            epsilon = max(2000 / episode, 0.01)
+            epsilon = 2000 / episode
 
         while not terminal:
             if np.random.rand() < epsilon:
@@ -79,7 +80,8 @@ def train(track, width, height, cont):
 
             time_step += 1
 
-        print('Games: %d Score: %d' % (episode + 1, total_reward))
+        if episode % 10 == 0:
+            print('Games: %d Score: %d' % (episode + 1, total_reward))
 
         total_reward_list.append(total_reward)
 
@@ -96,7 +98,7 @@ def replay(track, width, height, rand):
     sess = tf.Session()
 
     game = Game(track, width, height, show_game=True)
-    brain = DQN(sess, width, height, NUM_ACTION)
+    brain = DQN(sess, width, height, CHANNEL, NUM_ACTION)
 
     saver = tf.train.Saver()
     ckpt = tf.train.get_checkpoint_state('model')
